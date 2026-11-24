@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SMS Analyzer</title>
+<style>
+  html { background-color: #f1ebdf; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)' opacity='0.2'/%3E%3C/svg%3E"); }
+  body { font: 16px/1.5 system-ui, sans-serif; max-width: 46rem; margin: 0 auto; padding: 2rem 1rem; color: #2b261f; }
+  h1 { margin-top: 0; }
+  textarea { width: 100%; min-height: 8rem; font: inherit; color: inherit; padding: .5rem; box-sizing: border-box; background: rgba(255,252,245,.55); border: 1px solid #b9ad98; border-radius: 4px; }
+  .summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: .5rem; margin: 1rem 0; }
+  .card { border: 1px solid #b9ad98; border-radius: 6px; padding: .5rem .75rem; background: rgba(255,252,245,.45); }
+  .card b { display: block; font-size: 1.4rem; }
+  .error { color: #a3001b; }
+  .sym { display: inline-block; box-sizing: border-box; height: 1.9em; line-height: 1.7em; vertical-align: top; border: 1px solid #c8bca6; border-radius: 4px; padding: 0 .35rem; margin: .1rem; font-family: ui-monospace, monospace; background: rgba(255,252,245,.5); }
+  .hidden { background: #f3e2a9; border-color: #c9a640; }
+  .note { color: #5b5348; font-size: .9rem; }
+  h2 { font-size: 1rem; margin-bottom: .25rem; }
+  footer { margin-top: 2.5rem; padding-top: 1rem; border-top: 1px dashed #b9ad98; text-align: center; font-size: .9rem; color: #5b5348; }
+  footer p { margin: .25rem 0; }
+  footer a { color: inherit; }
+  .copyleft { display: inline-block; transform: scaleX(-1); }
+</style>
+</head>
+<body>
+<h1>SMS Analyzer</h1>
+<p class="note">Type or paste an SMS body. Everything runs in this page; nothing is sent anywhere.</p>
+<textarea id="sms" aria-label="SMS body" autofocus></textarea>
+<div id="out" aria-live="polite"></div>
+<p class="note">A browser turns a typed or pasted CR LF line break into a single LF, so a line break counts as 1 here. A message that carries CR LF counts 2.</p>
+
+<footer>
+<p><a href="https://github.com/asif-r-porosh/how-sms-segments-are-counted">github.com/asif-r-porosh/how-sms-segments-are-counted</a></p>
+<p><span class="copyleft" role="img" aria-label="Copyleft">&copy;</span> Asif R. Porosh</p>
+</footer>
+
+<script src="analyze-sms.js"></script>
+<script>
+  var MAX_SHOWN = 500;
+  var input = document.getElementById("sms");
+  var out = document.getElementById("out");
+
+  function card(label, value) {
+    var div = document.createElement("div");
+    div.className = "card";
+    div.appendChild(document.createTextNode(label));
+    var b = document.createElement("b");
+    b.textContent = value;
+    div.appendChild(b);
+    return div;
+  }
+
+  function render() {
+    out.textContent = "";
+    var r = analyzeSms(input.value);
+    if (!r.status.ok) {
+      var p = document.createElement("p");
+      p.className = "error";
+      p.textContent = r.status.response;
+      out.appendChild(p);
+      return;
+    }
+    var summary = document.createElement("div");
+    summary.className = "summary";
+    summary.appendChild(card("Encoding", r.isUnicode ? "Unicode (UCS-2)" : "English (GSM 7-bit)"));
+    summary.appendChild(card("Segments", String(r.segments)));
+    summary.appendChild(card("Length", String(r.length)));
+    summary.appendChild(card("Size of each segment", r.segmentSizes.join(" + ")));
+    out.appendChild(summary);
+
+    ["1", "2"].forEach(function (key) {
+      var g = r.bySize[key];
+      if (g.count === 0) return;
+      var h = document.createElement("h2");
+      h.textContent = "Size " + key + ": " + g.count + " characters, " + g.consumption + " used";
+      out.appendChild(h);
+      var box = document.createElement("div");
+      g.symbols.slice(0, MAX_SHOWN).forEach(function (s) {
+        var span = document.createElement("span");
+        span.className = s.indexOf("Non-Printable") === 0 ? "sym hidden" : "sym";
+        span.textContent = s === " " ? "\u2423" : (s === "\n" ? "\\n" : (s === "\r" ? "\\r" : s));
+        box.appendChild(span);
+      });
+      if (g.symbols.length > MAX_SHOWN) {
+        var more = document.createElement("span");
+        more.className = "note";
+        more.textContent = " ... and " + (g.symbols.length - MAX_SHOWN) + " more";
+        box.appendChild(more);
+      }
+      out.appendChild(box);
+    });
+  }
+
+  input.addEventListener("input", render);
+  render();
+</script>
+</body>
+</html>
