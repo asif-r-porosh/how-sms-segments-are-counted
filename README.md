@@ -1,16 +1,16 @@
 # Beyond Character Counting: How SMS Segments Work
 
-SMS messages are transmitted in segments, or parts, each with a limited content capacity. If the content fits within one segment, the message is considered a single-segment SMS. If it exceeds that capacity, it is divided into multiple segments. This process is transparent to the user, whose phone reassembles the segments and shows one complete message rather than its individual segments.
+An SMS that appears as one message on a phone may travel through the network as several smaller pieces. Each piece, called a segment, has a fixed amount of room. The receiving phone joins the pieces again before displaying the message, so the split remains invisible.
 
-A single-segment SMS holds 1120 bits (140 bytes), a protocol-defined limit. How many characters fit depends on how many bits each character takes, which in turn depends on the encoding scheme. A multi-segment SMS also needs a header in every segment. The header takes some of those bits and reduces the space left for message content.
+A single-segment SMS holds 1120 bits (140 bytes), a limit set by the protocol. Characters take different numbers of bits, depending on their encoding. The encoding determines how many characters fit in a segment.
 
-Standard text SMS is encoded in either GSM-7 or UCS-2. Messages containing English letters, numbers and standard symbols are usually sent using GSM-7. Messages containing emojis or characters from languages such as Bangla, Japanese, Arabic and Chinese are sent using Unicode (UCS-2). A UCS-2 message may still contain GSM-7 characters, but must contain at least one character that GSM-7 cannot encode.
+Standard text messages use one of two encodings: GSM-7 or UCS-2. Messages containing English letters, numbers, and standard symbols are usually sent using GSM-7. Messages containing emojis or characters from languages such as Bangla, Japanese, Arabic, and Chinese use Unicode (UCS-2). A UCS-2 message may still contain GSM-7 characters, but must contain at least one character that GSM-7 cannot encode.
+
+When a message needs more than one segment, every segment carries a small header. The header identifies the parts of the message and lets the receiving phone reassemble them in the correct order. Because the header occupies part of each segment, it leaves less room for the message content.
 
 ## GSM-7 encoding
 
-GSM-7 is the encoding normally used for English text messages. Most characters take 7 bits (technically a septet), although a small number take twice that. A character's length is the number of positions it takes within an SMS segment, and every length below is followed by its bits in brackets.
-
-According to the GSM-7 table, the following characters have a length of 1 (7 bits). Together with the escape control code (`ESC`) `0x1B`, which is not listed below, these characters form the GSM-7 basic character set of 128 values.
+In GSM-7, a character’s length is the number of bits it takes in an SMS segment. Most characters take 7 bits; a small number take 14 bits. The following characters have a length of 1 (7 bits). They are the 127 characters of the GSM-7 basic character set. Together with the escape control code (ESC, 0x1B), they fill its 128 values.
 
 - Letters and digits: `0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz`
 - Space (SP): `0x20`
@@ -18,38 +18,36 @@ According to the GSM-7 table, the following characters have a length of 1 (7 bit
 - Carriage return (CR): `0x0D`
 - Punctuation, symbols and accented letters: `@£$¥_!"#¤%&'()*+,-./:;<=>?¡§¿èéùìòÇØøÅåÆæßÉÄÖÑÜäöñüàΔΦΓΛΩΠΨΣΘΞ`
 
-The following characters have a length of 2 (14 bits), because each is sent as an escape code (`ESC`) followed by the character itself: 7 bits x 2 = 14 bits. These characters form the GSM-7 extended character set. There are 10 such characters.
+The GSM-7 extended character set has 10 characters, each with a length of 2 (14 bits). Each is sent as an escape code (`ESC`) followed by the character itself: 7 bits x 2 = 14 bits. The 10 characters are:
 
 - Printable characters: `€{}[]\^~|`
 - Form feed (FF): `0x1B 0x0A`
 
-A single-segment SMS made only of basic characters holds a maximum of 1120 bits / 7 bits = 160 characters. If the content contains one extended character, the maximum becomes 1 + (1120 bits - 14 bits) / 7 bits = 159 characters: the extended character counts as 1, and the remaining 1106 bits hold 158 basic characters.
+A single-segment SMS made only of basic characters holds a maximum of 1120 bits / 7 bits = 160 characters. One extended character lowers the maximum: it takes 14 bits and counts as 1 character. The remaining 1106 bits hold 158 basic characters, so the maximum becomes 159 characters.
 
 ## UCS-2 encoding
 
-A single character outside the GSM-7 tables, for example an emoji, ç, á or a curly quote, switches the whole message to UCS-2: every character, including plain letters, then takes 16 bits.
+If an SMS contains at least one character outside the GSM-7 character set—such as an emoji, ç, á, or a curly quotation mark—UCS-2 encoding is used. In UCS-2, each character occupies either 16 bits (a length of 1) or 32 bits (a length of 2). Characters in the Basic Multilingual Plane (BMP) take 16 bits. The BMP is the Unicode range that encompasses nearly all modern languages, punctuation, basic symbols, and some emojis. Characters outside the BMP—including newer emojis, rare ideographs, and ancient scripts—occupy 32 bits. GSM-7 characters are a subset of the BMP.
 
-In this encoding, each character has a length of 1 (16 bits, technically a code unit). Every Unicode character has a number, called its code point and written as `U+` followed by hex digits, for example `U+0995`. Characters from `U+0000` to `U+FFFF` form the BMP (Basic Multilingual Plane) and have a length of 1 (16 bits). That range covers Bangla and other everyday scripts, the GSM-7 characters, and some emojis.
+A single-segment SMS can hold a maximum of 1120 bits / 16 bits = 70 BMP characters. One surrogate pair reduces this maximum: it occupies 32 bits and counts as 1 character. The remaining 1088 bits can hold 68 BMP characters, making the maximum 69 characters.
 
-Characters above `U+FFFF`, including most emojis, do not fit in 16 bits. Those are sent as surrogate pairs and have a length of 2 (32 bits).
-
-A single-segment SMS holds a maximum of 1120 bits / 16 bits = 70 BMP characters. If the content contains one surrogate pair, the maximum becomes 1 + (1120 bits - 32 bits) / 16 bits = 69 characters: the pair counts as 1, and the remaining 1088 bits hold 68 BMP characters.
+A single-segment SMS can hold a maximum of 1120 bits / 16 bits = 70 characters. One character outside the BMP reduces this maximum: it occupies 32 bits and counts as 1 character. The remaining 1088 bits can hold 68 characters, making the maximum 69 characters.
 
 ## Splitting long messages into segments
 
-When the content exceeds 1120 bits, the SMS becomes multi-segment and a header is added to every segment. This header, called UDH (User Data Header), takes 48 bits and lets the receiving phone put the segments back in the right order.
+When the content exceeds 1120 bits, the SMS is divided into multiple segments, and a header is added to each segment. This header, known as the User Data Header (UDH), occupies 48 bits and enables the receiving phone to reassemble the segments in the correct order.
 
-For GSM-7, one alignment bit is added, because GSM-7 packs 7-bit values into octets. That gives 49 bits in total. A segment can then contain (1120 bits - 49 bits) / 7 bits = 153 basic characters. If the content contains one extended character, the maximum becomes 1 + (1120 bits - 49 bits - 14 bits) / 7 bits = 152 characters.
+For GSM-7, one alignment bit is added to the header. Because 7-bit characters must begin on a 7-bit boundary, and the next boundary after 48 bits is at 49 bits, the header occupies 49 bits. This leaves 1120 bits - 49 bits = 1071 bits, sufficient for 1071 bits / 7 bits = 153 basic characters. An extended character reduces this maximum: it occupies 14 bits but counts as one character. The remaining 1057 bits accommodate 151 basic characters, bringing the maximum to 152 characters.
 
-For UCS-2, no alignment bit is needed, so the header stays at 48 bits. A segment can contain (1120 bits - 48 bits) / 16 bits = 67 BMP characters. If the content contains one surrogate pair, the maximum becomes 1 + (1120 bits - 48 bits - 32 bits) / 16 bits = 66 characters.
+For UCS-2, no alignment bit is required because 48 bits is already a multiple of 16. The header therefore remains 48 bits, leaving 1,120 bits - 48 bits = 1072 bits, which is enough for 1072 bits / 16 bits = 67 BMP characters. A surrogate pair reduces this maximum: it occupies 32 bits but counts as one character. The remaining 1040 bits accommodate 65 BMP characters, bringing the maximum to 66 characters.
 
-Segments are filled with whole characters. A character is never cut between two segments: if the next character does not fit in the remaining space, it starts the next segment, so a segment can close before its capacity is fully used.
+Segments are filled using whole characters. If the next character does not fit in the available space, it begins in the next segment; consequently, a segment may close before its full capacity has been used.
 
 ## Example: splitting a GSM-7 message
 
 Consider a GSM-7 SMS that exceeds the single-segment limit of 1120 bits.
 
-The SMS contains 152 basic characters, then one € (a GSM-7 extended character), then 152 more basic characters. That is 305 characters, but a total length of 306 (2142 bits), because € has a length of 2 (14 bits).
+The SMS contains 152 basic characters, followed by one € (a GSM-7 extended character), and then 152 additional basic characters. This amounts to 305 characters, but a total length of 306 units (2142 bits), because € is encoded using two units (14 bits).
 
 | Content | Characters | Length | Bits |
 |---|---:|---:|---:|
@@ -57,14 +55,14 @@ The SMS contains 152 basic characters, then one € (a GSM-7 extended character)
 | Extended character € | 1 | 2 | 14 |
 | **Total** | **305** | **306** | **2142** |
 
-After deducting the 49-bit header, a segment has 1120 bits - 49 bits = 1071 bits available for content.
+After the 49-bit header, each segment has 1071 bits available for content.
 
 - Segment 1 takes the first 152 basic characters: 152 x 7 bits = 1064 bits. Only 7 bits remain.
 - The € needs 14 bits. It does not fit in the remaining 7 bits, so it moves to segment 2.
-- Segment 2 takes the € (14 bits) and 151 basic characters (1057 bits): 1071 bits, exactly full. That is 152 characters with a length of 153.
+- Segment 2 takes the € (14 bits) and 151 basic characters (1057 bits): 1071 bits, exactly full. That is 152 characters with a length of 153, because the € counts as 2.
 - Segment 3 takes the last character: 7 bits.
 
-Result: 3 segments, with lengths 152 (1064 bits), 153 (1071 bits) and 1 (7 bits). Dividing the total length 306 (2142 bits) by the segment capacity of 153 (1071 bits) gives exactly 2, which is why plain division undercounts. The 7 bits left at the end of segment 1 cannot hold the €, so the last character spills into a third segment.
+Result: Three segments, with lengths of 152 (1064 bits), 153 (1071 bits), and 1 (7 bits). Simple division underestimates the required number of segments: the total length of 306 (2142 bits), divided by the segment capacity of 153 (1071 bits), yields exactly two. The discrepancy arises because the final 7 bits of segment 1 remain unused, causing the last character to be placed in a third segment.
 
 ## Bit usage at a glance
 
@@ -74,30 +72,29 @@ Result: 3 segments, with lengths 152 (1064 bits), 153 (1071 bits) and 1 (7 bits)
 | Header, multi-segment (bits) | 49 | 48 |
 | GSM-7 basic character (bits) | 7 | 16 |
 | GSM-7 extended character (bits) | 14 | 16 |
-| Unicode (non GSM-7) character (bits) | N/A | 16 |
-| Surrogate pair (bits) | N/A | 32 |
+| Basic Multilingual Plane (BMP) | N/A | 16 |
+| Beyond BMP | N/A | 32 |
 | Characters in a single-segment SMS | 160 | 70 |
 | Characters per segment in a multi-segment SMS | 153 | 67 |
 
-The character counts assume characters of the smallest size: basic GSM-7 characters, or Unicode characters from the BMP. Extended GSM-7 characters and surrogate pairs have a length of 2 each (14 bits for extended GSM-7 characters, 32 bits for surrogate pairs), so fewer characters fit.
+The character counts assume the smallest character size: basic GSM-7 characters, or Unicode characters from the BMP.
 
 ## Scope and limits
 
-- Covered: the default GSM-7 alphabet and the GSM-7 extension table, and UCS-2 with surrogate pairs.
+- Covered: the GSM-7 basic and extended character sets, and UCS-2 with surrogate pairs.
 - Not covered: national language shift tables (Turkish, Spanish, Portuguese and others). Text that needs such tables is counted here as Unicode.
 - Not covered: operator and provider behaviour. Counting follows 3GPP TS 23.038 and 23.040, and a given network may differ.
 - Not covered: other header sizes. The header here is 6 bytes (48 bits), which gives 153 and 67 per segment. Some providers document 152 and 66 per segment, which fits a header one byte longer.
-- Labels for hidden characters are best effort and depend on the Unicode data of the running engine. Counts never depend on the labels.
 
 ## Reference implementation (JavaScript)
 
-The function below calculates SMS encoding, length, and segment count using the rules described above. The code picks the encoding, measures every character in that encoding, and fills the segments forward with whole characters, so a character that does not fit starts the next segment. The same code lives in `analyze-sms.js`.
+The function below calculates the encoding, length, and segment count of an SMS using the rules described above. It selects the encoding, measures each character in that encoding, and fills the segments sequentially with whole characters. The same code lives in `analyze-sms.js`.
 
-The code and the tests are companions to the text above. The code states the segmentation rules in executable form. The test vectors show how messages are split into segments: about 16,700 of them, covering English, Bangla, other scripts, emoji, and the boundaries where a message gains a segment.
+The tests and the browser page are companions to the code. The 16718 test vectors show how messages are split into segments. They cover English, Bangla, other scripts, emoji, and the boundaries at which a message is segmented.
 
 - `analyze-sms.js`: the function. In Node, `require("./analyze-sms.js")` gives `analyzeSms`; in a page, a plain script tag defines the function.
-- `index.html`: runs the function in a browser. Typing or pasting an SMS body shows the encoding, the number of segments, the size of each segment and the characters grouped by size. Nothing leaves the page.
-- `test-analyze-sms.js` with `test-vectors.json`: each vector holds a message with its expected encoding, length, segment count and segment sizes. Run with `node --test test-analyze-sms.js`.
+- `index.html`: runs the function in a browser. Typing or pasting an SMS body shows the encoding, the number of segments, the size of each segment, and the characters grouped by size. Characters that cannot be seen appear as `Non-Printable: U+XXXX`. These labels are best effort and depend on the Unicode data of the running engine, but counts never depend on them. Nothing leaves the page.
+- `test-analyze-sms.js` with `test-vectors.json`: each vector holds a message with its expected encoding, length, segment count, and segment sizes. Run with `node --test test-analyze-sms.js`.
 
 ```javascript
 /**
